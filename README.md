@@ -1,147 +1,154 @@
-import io
-import logging
-import socketserver
-from http import server
-from threading import Condition
-from gpiozero import Motor
-from Picamera2 import Picamera2
 
-# --- Motor Setup ---
-left_motor = Motor(forward=17, backward=27)
-right_motor = Motor(forward=22, backward=23)
+#include "esp_camera.h"
+#include <WiFi.h>
+#include <WebServer.h>
 
-def car_stop():
-    left_motor.stop()
-    right_motor.stop()
+// Replace with your network credentials
+const char* ssid = "YOUR_SSID";
+const char* password = "YOUR_PASSWORD";
 
-def car_forward():
-    left_motor.forward()
-    right_motor.forward()
+// Camera Model Definition (AI-Thinker)
+#define CAMERA_MODEL_AI_THINKER
+#include "camera_pins.h"
 
-def car_backward():
-    left_motor.backward()
-    right_motor.backward()
+WebServer server(80);
 
-def car_left():
-    left_motor.backward()
-    right_motor.forward()
+// Motor Pins
+const int IN1 = 12;
+const int IN2 = 13;
+const int IN3 = 15;
+const int IN4 = 14;
 
-def car_right():
-    left_motor.forward()
-    right_motor.backward()
-
-# --- Streaming Output Setup ---
-class StreamingOutput(object):
-    def __init__(self):
-        self.frame = None
-        self.buffer = io.BytesIO()
-        self.condition = Condition()
-
-    def write(self, buf):
-        if buf.startswith(b'\xff\xd8'):
-            self.buffer.truncate()
-            with self.condition:
-                self.frame = self.buffer.getvalue()
-                self.condition.notify_all()
-            self.buffer.seek(0)
-        return self.buffer.write(buf)
-
-# --- Web Server Handler ---
-PAGE = """\
+// Embedded HTML UI with embedded stream and touch/click controls
+const char PROGMEM INDEX_HTML[] = R"rawliteral(
+<!DOCTYPE html>
 <html>
 <head>
-<title>Surveillance Car</title>
-<style>
-  body { text-align: center; background-color: #1a1a1a; color: white; font-family: Arial; }
-  .btn { width: 80px; height: 50px; font-size: 18px; margin: 5px; cursor: pointer; }
-</style>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ESP32-CAM Robot Car</title>
+  <style>
+    body { font-family: Arial; text-align: background: #222; color: #fff; margin: 0; padding: 20px; background-color: #121212; color: #e0e0e0; }
+    h2 { color: #00bcd4; }
+    img { width: 100%; max-width: 400px; border-radius: 8px; border: 2px solid #00bcd4; }
+    .btn { width: 90px; height: 90px; font-size: 24px; margin: 5px; background: #00bcd4; color: white; border: none; border-radius: 50%; cursor: pointer; outline: none; box-shadow: 0 4px #008ba3; }
+    .btn:active { background: #008ba3; transform: translateY(4px); box-shadow: 0 0 #008ba3; }
+    .control-pad { display: grid; grid-template-columns: repeat(3, 100px); justify-content: center; gap: 5px; margin-top: 20px; }
+    .empty { visibility: hidden; }
+  </style>
 </head>
 <body>
-<h1>Surveillance Car Control</h1>
-<img src="stream.mjpg" width="640" height="480" /><br/><br/>
-<div>
-  <button class="btn" onclick="fetch('/forward')">▲</button><br/>
-  <button class="btn" onclick="fetch('/left')">◄</button>
-  <button class="btn" onclick="fetch('/stop')">■</button>
-  <button class="btn" onclick="fetch('/right')">►</button><br/>
-  <button class="btn" onclick="fetch('/backward')">▼</button>
-</div>
+  <center>
+    <h2>ESP32-CAM Surveillance Car</h2>
+    <img src="" id="stream" crossorigin><br><br>
+    <div class="control-pad">
+      <div class="empty"></div>
+      <button class="btn" ontouchstart="fetch('/action?go=forward')" onmousedown="fetch('/action?go=forward')">&#9650;</button>
+      <div class="empty"></div>
+      <button class="btn" ontouchstart="fetch('/action?go=left')" onmousedown="fetch('/action?go=left')">&#9668;</button>
+      <button class="btn" ontouchstart="fetch('/action?go=stop')" onmousedown="fetch('/action?go=stop')">&#9632;</button>
+      <button class="btn" ontouchstart="fetch('/action?go=right')" onmousedown="fetch('/action?go=right')">&#9658;</button>
+      <div class="empty"></div>
+      <button class="btn" ontouchstart="fetch('/action?go=backward')" onmousedown="fetch('/action?go=backward')">&#9660;</button>
+      <div class="empty"></div>
+    </div>
+  </center>
+  <script>
+    window.onload = function() {
+      document.getElementById("stream").src = window.location.origin + ":81/stream";
+    }
+  </script>
 </body>
 </html>
-"""
+)rawliteral";
 
-class StreamingHandler(server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == '/':
-            self.send_response(301)
-            self.send_header('Location', '/index.html')
-            self.end_headers()
-        elif self.path == '/index.html':
-            content = PAGE.encode('utf-8')
-            self.send_response(200)
-            self.send_header('Content-Type', 'text/html')
-            self.send_header('Content-Length', len(content))
-            self.end_headers()
-            self.wfile.write(content)
-        elif self.path == '/forward':
-            car_forward()
-            self.send_response(200)
-            self.end_headers()
-        elif self.path == '/backward':
-            car_backward()
-            self.send_response(200)
-            self.end_headers()
-        elif self.path == '/left':
-            car_left()
-            self.send_response(200)
-            self.end_headers()
-        elif self.path == '/right':
-            car_right()
-            self.send_response(200)
-            self.end_headers()
-        elif self.path == '/stop':
-            car_stop()
-            self.send_response(200)
-            self.end_headers()
-        elif self.path == '/stream.mjpg':
-            self.send_response(200)
-            self.send_header('Age', 0)
-            self.send_header('Cache-Control', 'no-cache, private')
-            self.send_header('Pragma', 'no-cache')
-            self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
-            self.end_headers()
-            try:
-                while True:
-                    with output.condition:
-                        output.condition.wait()
-                        frame = output.frame
-                    self.wfile.write(b'--FRAME\r\n')
-                    self.send_header('Content-Type', 'image/jpeg')
-                    self.send_header('Content-Length', len(frame))
-                    self.end_headers()
-                    self.wfile.write(frame)
-                    self.wfile.write(b'\r\n')
-            except Exception as e:
-                logging.warning(f'Removed streaming client {self.client_address}: {e}')
-        else:
-            self.send_error(404)
-            self.end_headers()
+void handleRoot() {
+  server.send(200, "text/html", INDEX_HTML);
+}
 
-class StreamingServer(socketserver.ThreadingMixIn, server.HTTPServer):
-    allow_reuse_address = True
-    daemon_threads = True
+void handleAction() {
+  String state = server.arg("go");
+  if (state == "forward") {
+    digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
+    digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
+  } else if (state == "backward") {
+    digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
+    digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
+  } else if (state == "left") {
+    digitalWrite(IN1, LOW); digitalWrite(IN2, HIGH);
+    digitalWrite(IN3, HIGH); digitalWrite(IN4, LOW);
+  } else if (state == "right") {
+    digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);
+    digitalWrite(IN3, LOW); digitalWrite(IN4, HIGH);
+  } else if (state == "stop") {
+    digitalWrite(IN1, LOW); digitalWrite(IN2, LOW);
+    digitalWrite(IN3, LOW); digitalWrite(IN4, LOW);
+  }
+  server.send(200, "text/plain", "OK");
+}
 
-# --- Main Execution ---
-output = StreamingOutput()
-picam2 = Picamera2()
-picam2.configure(picam2.create_video_configuration({"size": (640, 480)}))
-picam2.start_recording(output, format='jpeg')
+void startCameraServer();
 
-try:
-    address = ('', 8000)
-    server = StreamingServer(address, StreamingHandler)
-    print("Server starting at http://<PI_IP_ADDRESS>:8000")
-    server.serve_forever()
-finally:
-    picam2.stop_recording()
-    car_stop()
+void setup() {
+  Serial.begin(115200);
+
+  // Setup motor pins
+  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
+  pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
+  digitalWrite(IN1, LOW); digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW); digitalWrite(IN4, LOW);
+
+  camera_config_t config;
+  config.ledc_channel = LEDC_CHANNEL_0;
+  config.ledc_timer = LEDC_TIMER_0;
+  config.pin_d0 = Y2_GPIO_NUM;
+  config.pin_d1 = Y3_GPIO_NUM;
+  config.pin_d2 = Y4_GPIO_NUM;
+  config.pin_d3 = Y5_GPIO_NUM;
+  config.pin_d4 = Y6_GPIO_NUM;
+  config.pin_d5 = Y7_GPIO_NUM;
+  config.pin_d6 = Y8_GPIO_NUM;
+  config.pin_d7 = Y9_GPIO_NUM;
+  config.pin_xclk = XCLK_GPIO_NUM;
+  config.pin_pclk = PCLK_GPIO_NUM;
+  config.pin_vsync = VSYNC_GPIO_NUM;
+  config.pin_href = HREF_GPIO_NUM;
+  config.pin_sccb_sda = SIOD_GPIO_NUM;
+  config.pin_sccb_scl = SIOC_GPIO_NUM;
+  config.pin_pwdn = PWDN_GPIO_NUM;
+  config.pin_reset = RESET_GPIO_NUM;
+  config.xclk_freq_hz = 20000000;
+  config.pixel_format = PIXFORMAT_JPEG;
+
+  if (psramFound()) {
+    config.frame_size = FRAMESIZE_QVGA;
+    config.jpeg_quality = 12;
+    config.fb_count = 2;
+  } else {
+    config.frame_size = FRAMESIZE_QQVGA;
+    config.jpeg_quality = 12;
+    config.fb_count = 1;
+  }
+
+  esp_camera_init(&config);
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+
+  // Start web server handlers
+  server.on("/", HTTP_GET, handleRoot);
+  server.on("/action", HTTP_GET, handleAction);
+  server.begin();
+  
+  startCameraServer(); // Starts stream server on port 81
+
+  Serial.println("");
+  Serial.print("Open this URL in your phone browser: http://");
+  Serial.println(WiFi.localIP());
+}
+
+void loop() {
+  server.handleClient();
+}
