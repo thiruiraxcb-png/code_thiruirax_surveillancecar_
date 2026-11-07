@@ -1,22 +1,75 @@
- 
-To:<☆for all GitHub users☆>
+import cv2
+import numpy as np
+import urllib.request
+import socket
 
-Date: [26🕉🪔Diwali]
+# --- Configuration ---
+# Replace with the IP address printed in your ESP32-CAM Serial Monitor
+ESP32_IP = "http://192.168.1.100"  
+STREAM_URL = f"{ESP32_IP}:81/stream"  # Default stream port for ESP32-CAM
 
-Subject: Request for Approval to Develop and Test a Surveillance Vehicle Project
+def send_command(command):
+    """Send movement commands to the surveillance car server."""
+    try:
+        url = f"{ESP32_IP}/control?var=car&val={command}"
+        urllib.request.urlopen(url, timeout=1)
+        print(f"Command Sent: {command}")
+    except Exception as e:
+        print(f"Failed to send command '{command}': {e}")
 
-Dear ☆G¡T♤○b u$e/-s,
+def main():
+    print("=" * 50)
+    print(" Surveillance Car Remote Control System ")
+    print(" Controls:")
+    print("   [W] - Forward | [S] - Backward")
+    print("   [A] - Left    | [D] - Right")
+    print("   [Space] - Stop")
+    print("   [Q] - Quit Application")
+    print("=" * 50)
 
-I am writing to formally request approval to undertake the development and testing of a [Surveillance Car / Remote Monitoring Vehicle] as part of [mention purpose, e.g., project development / security assessment / research work].
+    # Open video stream from ESP32-CAM
+    stream = urllib.request.urlopen(STREAM_URL)
+    bytes_data = b''
 
-Project Overview:
+    while True:
+        # Read camera stream chunk by chunk
+        bytes_data += stream.read(1024)
+        a = bytes_data.find(b'\xff\xd8') # JPEG frame start boundary
+        b = bytes_data.find(b'\xff\xd9') # JPEG frame end boundary
 
-Type: Remotely controlled surveillance vehicle equipped with [mention components, e.g., real-time video streaming, Wi-Fi control, sensors].
+        if a != -1 and b != -1:
+            jpg = bytes_data[a:b+2]
+            bytes_data = bytes_data[b+2:]
+            
+            # Decode JPEG image array to OpenCV format
+            frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
 
-Objective: To assess remote monitoring capabilities in restricted or difficult-to-access areas while maintaining safety and operational efficiency.
+            if frame is not None:
+                # Add status overlay to frame
+                cv2.putText(frame, "STATUS: LIVE STREAMING", (10, 30), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                
+                # Display feed window
+                cv2.imshow("Surveillance Car Feed", frame)
 
-Scope of Testing: Operational testing will be strictly confined to [designated test area / location] during approved hours.
+        # Handle keyboard input controls
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('w'):
+            send_command("forward")
+        elif key == ord('s'):
+            send_command("backward")
+        elif key == ord('a'):
+            send_command("left")
+        elif key == ord('d'):
+            send_command("right")
+        elif key == 32:  # Spacebar
+            send_command("stop")
+        elif key == ord('q'):
+            print("Shutting down control system...")
+            send_command("stop")
+            break
 
-All safety protocols will be observed to ensure no disruption or security risk occurs during testing. I would welcome the opportunity to discuss this request further or provide additional documentation if needed.
+    cv2.destroyAllWindows()
 
-Thank you for your time and consideration.
+if __name__ == "__main__":
+    main()
