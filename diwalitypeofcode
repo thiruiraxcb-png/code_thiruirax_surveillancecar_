@@ -1,0 +1,89 @@
+// Bluetooth RC Surveillance Car Code for Arduino (Uno/Nano)
+// Compatible with standard Bluetooth RC controller mobile apps (Commands: F, B, L, R, S)
+
+// Motor Driver Pins (L298N)
+const int enA = 9;   // Speed control for Left Motor (PWM)
+const int in1 = 4;   // Left Motor Direction 1
+const int in2 = 5;   // Left Motor Direction 2
+const int in3 = 6;   // Right Motor Direction 1
+const int in4 = 7;   // Right Motor Direction 2
+const int enB = 10;  // Speed control for Right Motor (PWM)
+
+char command; 
+
+void setup() {
+  // Set motor control pins as outputs
+  pinMode(enA, OUTPUT);
+  pinMode(enB, OUTPUT);
+  pinMode(in1, OUTPUT);
+  pinMode(in2, OUTPUT);
+  pinMode(in3, OUTPUT);
+  pinMode(in4, OUTPUT);
+
+  // Set motor speed (0 to 255)
+  analogWrite(enA, 200);
+  analogWrite(enB, 200);
+
+  // Initialize Serial communication for HC-05 Bluetooth module
+  Serial.begin(9600);
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    command = Serial.read();
+    
+    // Match incoming characters from Bluetooth app
+    switch (command) {
+      case 'F': // Forward
+        moveForward();
+        break;
+      case 'B': // Backward
+        moveBackward();
+        break;
+      case 'L': // Left
+        turnLeft();
+        break;
+      case 'R': // Right
+        turnRight();
+        break;
+      case 'S': // Stop
+        stopCar();
+        break;
+    }
+  }
+}
+
+void moveForward() {
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+}
+
+void moveBackward() {
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+}
+
+void turnLeft() {
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, HIGH);
+  digitalWrite(in3, HIGH);
+  digitalWrite(in4, LOW);
+}
+
+void turnRight() {
+  digitalWrite(in1, HIGH);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, HIGH);
+}
+
+void stopCar() {
+  digitalWrite(in1, LOW);
+  digitalWrite(in2, LOW);
+  digitalWrite(in3, LOW);
+  digitalWrite(in4, LOW);
+}
