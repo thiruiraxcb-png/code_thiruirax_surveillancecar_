@@ -1,28 +1,34 @@
  
 
-To:for all GitHub users!
+import cv2
+import numpy as np
+import urllib.request
+import socket
 
-[Name V.Thirukkumaran Kumaran]
+# --- Configuration ---
+# Replace with the IP address printed in your ESP32-CAM Serial Monitor
+ESP32_IP = "http://192.168.1.100"  
+STREAM_URL = f"{ESP32_IP}:81/stream"  # Default stream port for ESP32-CAM
 
-Date: [26' Diwali]
+def send_command(command):
+    """Send movement commands to the surveillance car server."""
+    try:
+        url = f"{ESP32_IP}/control?var=car&val={command}"
+        urllib.request.urlopen(url, timeout=1)
+        print(f"Command Sent: {command}")
+    except Exception as e:
+        print(f"Failed to send command '{command}': {e}")
 
-Subject: Request for Approval to Develop and Test a Surveillance Vehicle Project
+def main():
+    print("=" * 50)
+    print(" Surveillance Car Remote Control System ")
+    print(" Controls:")
+    print("   [W] - Forward | [S] - Backward")
+    print("   [A] - Left    | [D] - Right")
+    print("   [Space] - Stop")
+    print("   [Q] - Quit Application")
+    print("=" * 50)
 
-Dear [Github Users],
-
-I am writing to formally request approval to undertake the development and testing of a [Surveillance Car / Remote Monitoring Vehicle] as part of [mention purpose, e.g., project development / security assessment / research work].
-
-Project Overview:
-
-Type: Remotely controlled surveillance vehicle equipped with [mention components, e.g., real-time video streaming, Wi-Fi control, sensors].
-
-Objective: To assess remote monitoring capabilities in restricted or difficult-to-access areas while maintaining safety and operational efficiency.
-
-Scope of Testing: Operational testing will be strictly confined to [designated test area / location] during approved hours.
-
-All safety protocols will be observed to ensure no disruption or security risk occurs during testing. I would welcome the opportunity to discuss this request further or provide additional documentation if needed.
-
-Thank you for your time and consideration.
-
-Sincerely,
-V.Thirukkumaran Kumaran
+    # Open video stream from ESP32-CAM
+    stream = urllib.request.urlopen(STREAM_URL)
+    bytes_data
